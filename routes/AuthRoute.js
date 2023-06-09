@@ -11,6 +11,8 @@ const {
   handleRefreshToken,
   logout,
   updatePassword,
+  forgotPasswordToken,
+  resetPassword,
 } = require("../controllers/UserController");
 const { authMiddleware, isAdmin } = require("../middlewares/authMiddleware");
 
@@ -37,5 +39,9 @@ router.put("/block-user/:id", authMiddleware, isAdmin, blockUser);
 router.put("/unblock-user/:id", authMiddleware, isAdmin, unblockUser);
 // update user's password
 router.put("/password", authMiddleware, updatePassword);
+// forgot password
+router.post("/forgot-password-token", forgotPasswordToken);
+// reset password
+router.put("/reset-password/:token", resetPassword);
 
 module.exports = router;

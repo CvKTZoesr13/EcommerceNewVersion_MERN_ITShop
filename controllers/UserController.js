@@ -4,7 +4,8 @@ const generateToken = require("../config/jsonWebToken");
 const validateMongoDbId = require("../utils/validateMongoDbId");
 const { generateRefreshToken } = require("../config/refreshToken");
 const jwt = require("jsonwebtoken");
-
+const sendEmail = require("./EmailController");
+const crypto = require("crypto");
 const createUser = asyncHandler(async (req, res) => {
   const email = req.body.email;
   const findUser = await User.findOne({ email: email });
@@ -236,6 +237,51 @@ const updatePassword = asyncHandler(async (req, res) => {
   }
 });
 
+// POST
+// forgot password
+const forgotPasswordToken = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  const user = await User.findOne({ email });
+  if (!user) throw new Error("User not found with this email");
+  try {
+    const token = await user?.createPasswordResetToken();
+    await user.save();
+    const resetURL =
+      `Có vẻ bạn đang gặp sự cố đăng nhập, xin hãy nhấn vào liên kết này để đặt lại mật khẩu của bạn. ` +
+      `Liên kết này khả dụng trong vòng 10 phút kể từ thời gian bạn nhận được email này. ` +
+      `<a href='http://localhost:5000/api/user/reset-password/${token}'>Nhấn vào đây</a>`;
+
+    const data = {
+      to: email,
+      text: "Xin chào",
+      subject: "Quên mật khẩu - Forgot password",
+      htm: resetURL,
+    };
+    sendEmail(data);
+    res.json(token);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+// PUT
+// reset user's password
+const resetPassword = asyncHandler(async (req, res) => {
+  const { password } = req.body;
+  const { token } = req.params;
+  const hashedToken = crypto.createHash("sha256").update(token).digest("hex");
+  const user = await User.findOne({
+    passwordResetToken: hashedToken,
+    passwordResetExpires: { $gt: Date.now() },
+  });
+  if (!user) throw new Error("Token expired, please try it again.");
+  user.password = password;
+  user.passwordResetToken = undefined;
+  user.passwordResetExpires = undefined;
+  await user.save();
+  res.json(user);
+});
+
 module.exports = {
   createUser,
   loginUser,
@@ -248,4 +294,6 @@ module.exports = {
   handleRefreshToken,
   logout,
   updatePassword,
+  forgotPasswordToken,
+  resetPassword,
 };
