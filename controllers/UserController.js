@@ -88,7 +88,7 @@ const handleRefreshToken = asyncHandler(async (req, res) => {
   console.log(cookie);
   if (!cookie?.refreshToken)
     throw new Error(
-      "There is no refresh token in cookies. Please check it and try again!"
+      "There is no refresh token in cookies. Please login and try again!"
     );
   const refreshToken = cookie.refreshToken;
   console.log(refreshToken);
