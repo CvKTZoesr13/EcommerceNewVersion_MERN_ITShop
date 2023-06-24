@@ -39,11 +39,7 @@ var blogSchema = new mongoose.Schema(
         ref: "User",
       },
     ],
-    image: {
-      type: String,
-      default:
-        "https://www.google.com/url?sa=i&url=https%3A%2F%2Fwww.toponseek.com%2Fblogs%2Fviet-blog%2F&psig=AOvVaw1WJLeprAE1YAmIZIEvvwv9&ust=1686369565288000&source=images&cd=vfe&ved=0CBEQjRxqFwoTCPCAiqqmtf8CFQAAAAAdAAAAABAE",
-    },
+    images: [],
     author: {
       type: String,
       default: "Admin",
