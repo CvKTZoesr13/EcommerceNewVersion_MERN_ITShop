@@ -23,6 +23,7 @@ const createUser = asyncHandler(async (req, res) => {
   }
 });
 
+// user login
 const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   //   check if user exists
@@ -48,6 +49,40 @@ const loginUser = asyncHandler(async (req, res) => {
       mobile: findUser?.mobile,
       isAdmin: findUser?.isAdmin,
       accessToken: generateToken(findUser?._id),
+    });
+  } else {
+    throw new Error("Invalid Credentials");
+  }
+});
+
+// admin login
+const loginAdmin = asyncHandler(async (req, res) => {
+  const { email, password } = req.body;
+  //   check if user exists
+  const findAdmin = await User.findOne({ email });
+  if (findAdmin.isAdmin !== "admin")
+    throw new Error("This account has no permission.");
+  if (findAdmin && (await findAdmin.isPasswordMatched(password))) {
+    const refreshToken = await generateRefreshToken(findAdmin?._id);
+    const updateUser = await User.findByIdAndUpdate(
+      findAdmin.id,
+      {
+        refreshToken: refreshToken,
+      },
+      { new: true }
+    );
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      maxAge: 72 * 60 * 60 * 1000,
+    });
+    res.json({
+      _id: findAdmin?._id,
+      firstName: findAdmin?.firstName,
+      lastName: findAdmin?.lastName,
+      email: findAdmin?.email,
+      mobile: findAdmin?.mobile,
+      isAdmin: findAdmin?.isAdmin,
+      accessToken: generateToken(findAdmin?._id),
     });
   } else {
     throw new Error("Invalid Credentials");
@@ -285,6 +320,7 @@ const resetPassword = asyncHandler(async (req, res) => {
 module.exports = {
   createUser,
   loginUser,
+  loginAdmin,
   getAllUsers,
   getAUser,
   deleteAUser,
