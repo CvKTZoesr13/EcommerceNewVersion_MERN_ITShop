@@ -1,3 +1,10 @@
 {
-  "cSpell.words": ["cloudinary", "fieldname", "minetype"]
+  "cSpell.words": [
+    "cloudinary",
+    "fieldname",
+    "middlewares",
+    "minetype",
+    "uniqid"
+  ],
+  "cSpell.language": "en,vi"
 }
