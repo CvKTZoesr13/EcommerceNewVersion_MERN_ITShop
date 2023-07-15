@@ -1,5 +1,6 @@
 const express = require("express");
 const dbConnect = require("./config/dbConnect");
+const core = require("cors");
 const app = express();
 const dotenv = require("dotenv").config();
 const PORT = process.env.PORT || 5000;
@@ -17,6 +18,9 @@ const { notFound, errorHandler } = require("./middlewares/errorHandler");
 const cookieParser = require("cookie-parser");
 const morgan = require("morgan");
 dbConnect();
+
+// Cross-Origin Resource Sharing
+app.use(cors());
 
 app.use(morgan("dev"));
 app.use(bodyParser.json());

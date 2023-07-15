@@ -53,7 +53,7 @@ router.put(
   updateOrderStatus
 );
 // get all users
-router.get("/all-users", getAllUsers);
+router.get("/all-users", authMiddleware, isAdmin, getAllUsers);
 // refresh token
 router.get("/refresh", handleRefreshToken);
 // logout
