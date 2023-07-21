@@ -40,8 +40,8 @@ const getBlog = asyncHandler(async (req, res) => {
   validateMongoDbId(id);
   try {
     const getBlog = await Blog.findById(id)
-      .populate("likes")
-      .populate("dislikes");
+      .populate({ path: "likes", select: "_id firstName lastName" })
+      .populate({ path: "dislikes", select: "_id firstName lastName" });
     const updateViews = await Blog.findByIdAndUpdate(
       id,
       {

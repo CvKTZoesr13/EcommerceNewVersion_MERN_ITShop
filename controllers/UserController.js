@@ -66,7 +66,10 @@ const loginAdmin = asyncHandler(async (req, res) => {
   //   check if user exists
   const findAdmin = await User.findOne({ email });
   if (findAdmin.isAdmin !== "admin")
-    throw new Error("This account has no permission.");
+    // throw new Error("This account has no permission.");
+    res.status(403).json({
+      message: "This account has no permission.",
+    });
   if (findAdmin && (await findAdmin.isPasswordMatched(password))) {
     const refreshToken = await generateRefreshToken(findAdmin?._id);
     const updateUser = await User.findByIdAndUpdate(
@@ -512,15 +515,28 @@ const createOrder = asyncHandler(async (req, res) => {
     throw new Error(error);
   }
 });
-// GET Orders
+// GET Orders are owned by an user
 const getOrders = asyncHandler(async (req, res) => {
   const { _id } = req.user;
   validateMongoDbId(_id);
   try {
-    const userOrders = await Order.findOne({ orderby: _id })
+    const userOrders = await Order.find({ orderby: _id })
       .populate("products.product")
+      .populate("orderby")
       .exec();
     res.json(userOrders);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+// GET all orders (admin user only)
+const getAllOrders = asyncHandler(async (req, res) => {
+  try {
+    const getAllOrders = await Order.find()
+      .populate("products.product")
+      .populate("orderby")
+      .exec();
+    res.json(getAllOrders);
   } catch (error) {
     throw new Error(error);
   }
@@ -572,4 +588,5 @@ module.exports = {
   createOrder,
   getOrders,
   updateOrderStatus,
+  getAllOrders,
 };
