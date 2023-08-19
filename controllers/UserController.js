@@ -375,7 +375,10 @@ const userCart = asyncHandler(async (req, res) => {
     const alreadyExistCart = await Cart.findOne({ orderby: user._id });
     if (alreadyExistCart) {
       const deletedCart = await Cart.findOneAndDelete({ orderby: user._id });
-      res.json(deletedCart);
+      res.json({
+        deletedCart,
+        message: "Error, duplicated cart, this have been removed!",
+      });
     } else {
       for (let i = 0; i < cart.length; i++) {
         object.product = cart[i]._id;
@@ -383,7 +386,8 @@ const userCart = asyncHandler(async (req, res) => {
         object.color = cart[i].color;
         getPrice = await Product.findById(cart[i]._id).select("price").exec();
         object.price = getPrice.price;
-        products.push(object);
+
+        products.push({ ...object });
       }
       let cartTotal = 0;
       for (let i = 0; i < products.length; i++) {
@@ -541,6 +545,20 @@ const getAllOrders = asyncHandler(async (req, res) => {
     throw new Error(error);
   }
 });
+// POST an order by user id (for admin panel)
+const getOrderByUserId = asyncHandler(async (req, res) => {
+  const { id } = req.params;
+  validateMongoDbId(id);
+  try {
+    const userOrders = await Order.find({ orderby: id })
+      .populate("products.product")
+      .populate({ path: "orderby", select: "_id firstName lastName address" })
+      .exec();
+    res.json(userOrders);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
 
 // UPDATE order's status - delivered - delivering - cancelled
 const updateOrderStatus = asyncHandler(async (req, res) => {
@@ -589,4 +607,5 @@ module.exports = {
   getOrders,
   updateOrderStatus,
   getAllOrders,
+  getOrderByUserId,
 };

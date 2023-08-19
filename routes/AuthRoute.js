@@ -24,6 +24,7 @@ const {
   getOrders,
   updateOrderStatus,
   getAllOrders,
+  getOrderByUserId,
 } = require("../controllers/UserController");
 const { authMiddleware, isAdmin } = require("../middlewares/authMiddleware");
 
@@ -46,7 +47,13 @@ router.post("/cart/cash-order", authMiddleware, createOrder);
 router.get("/get-orders", authMiddleware, getOrders);
 // get all orders of all users
 router.get("/all-orders-all-users", authMiddleware, isAdmin, getAllOrders);
-
+// get orders by user id
+router.post(
+  "/all-orders-an-user/:id",
+  authMiddleware,
+  isAdmin,
+  getOrderByUserId
+);
 // apply coupon
 router.post("/cart/apply-coupon", authMiddleware, applyCoupon);
 // update order's status
