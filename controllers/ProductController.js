@@ -124,7 +124,11 @@ const addToWishList = asyncHandler(async (req, res) => {
           new: true,
         }
       );
-      res.json(user);
+      res.json({
+        user: user,
+        message: "Deleted duplicate product in wishlist",
+        isDuplicated: true,
+      });
     } else {
       let user = await User.findByIdAndUpdate(
         _id,
