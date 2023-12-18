@@ -1,4 +1,5 @@
 const User = require("../models/User");
+const UserOAuth = require("../models/UserOAuth");
 const Product = require("../models/Product");
 const Cart = require("../models/Cart");
 const Coupon = require("../models/Coupon");
@@ -11,6 +12,16 @@ const jwt = require("jsonwebtoken");
 const sendEmail = require("./EmailController");
 const crypto = require("crypto");
 const uniqid = require("uniqid");
+const axios = require("axios");
+const { OAuth2Client } = require("google-auth-library");
+const dotenv = require("dotenv").config();
+// exchange tokens for google oauth - gapi
+const oAuth2Client = new OAuth2Client(
+  process.env.GOOGLE_CLIENT_ID,
+  process.env.GOOGLE_CLIENT_SECRET,
+  "postmessage"
+);
+
 const createUser = asyncHandler(async (req, res) => {
   const email = req.body.email;
   const findUser = await User.findOne({ email: email });
@@ -58,6 +69,124 @@ const loginUser = asyncHandler(async (req, res) => {
   } else {
     throw new Error("Invalid Credentials");
   }
+});
+
+// user login - Google - userController - using with passport
+const googleOAuthLogin = asyncHandler(async (req, res) => {
+  const { email } = req.body;
+  const findOAuthUser = await UserOAuth.findOne({
+    email,
+  });
+  const findUser = await User.findOne({ email });
+  if (findUser?.typeLogin === "google") {
+    const refreshToken = await generateRefreshToken(findUser?._id);
+    const updateUser = await User.findByIdAndUpdate(
+      findUser.id,
+      {
+        refreshToken: refreshToken,
+      },
+      { new: true }
+    );
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      maxAge: 72 * 60 * 60 * 1000,
+    });
+    res.json({
+      _id: findUser?._id,
+      firstName: findUser?.firstName,
+      lastName: findUser?.lastName,
+      email: findUser?.email,
+      mobile: findUser?.mobile,
+      typeLogin: findOAuthUser?.typeLogin,
+      isAdmin: findUser?.isAdmin,
+      accessToken: generateToken(findUser?._id),
+    });
+  }
+
+  // refreshToken in OAuthUser model
+  const sysRefreshToken = await generateRefreshToken(findOAuthUser?._id);
+  const updateUser = await UserOAuth.findByIdAndUpdate(
+    findOAuthUser?._id,
+    {
+      refreshToken: sysRefreshToken,
+    },
+    { new: true }
+  );
+});
+
+// user login - Google - using with google api javascript client - https://github.com/google/google-api-javascript-client
+const gapiLogin = asyncHandler(async (req, res) => {
+  const { tokens } = await oAuth2Client.getToken(req.body.code); // exchange code for tokens
+  // console.log(tokens);
+  const response = await axios.get(
+    `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${tokens.access_token}`
+  );
+  // console.log(response);
+  const user = response.data;
+  // create new user
+  const findAUser = await UserOAuth.findOne({
+    email: user.email,
+  });
+  if (!findAUser) {
+    try {
+      const userData = {
+        firstName:
+          user.family_name === undefined
+            ? user.given_name.split(" ")[0]
+            : user.family_name,
+        lastName: user.given_name,
+        email: user.email,
+        mobile: "null",
+        typeLogin: "google",
+        locale: user.locale,
+      };
+      const newOAuthUser = await UserOAuth.create(userData);
+      await User.create(userData);
+      console.log(newOAuthUser);
+    } catch (error) {
+      throw new Error(error);
+    }
+  } else {
+    console.log("User exists! User's id: " + findAUser?._id);
+  }
+  // end create new user
+  const findUser = await User.findOne({ email: user.email });
+  if (findUser?.typeLogin === "google") {
+    const refreshToken = await generateRefreshToken(findUser?._id);
+    const updateUser = await User.findByIdAndUpdate(
+      findUser.id,
+      {
+        refreshToken: refreshToken,
+      },
+      { new: true }
+    );
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      maxAge: 72 * 60 * 60 * 1000,
+    });
+    res.json({
+      _id: findUser?._id,
+      firstName: findUser?.firstName,
+      lastName: findUser?.lastName,
+      email: findUser?.email,
+      mobile: findUser?.mobile,
+      typeLogin: findAUser?.typeLogin,
+      isAdmin: findUser?.isAdmin,
+      accessToken: generateToken(findUser?._id),
+    });
+  } else {
+    throw new Error("Invalid Credentials");
+  }
+
+  // refreshToken in OAuthUser model
+  const sysRefreshToken = await generateRefreshToken(findAUser?._id);
+  const updateUser = await UserOAuth.findByIdAndUpdate(
+    findAUser?._id,
+    {
+      refreshToken: sysRefreshToken,
+    },
+    { new: true }
+  );
 });
 
 // admin login
@@ -586,6 +715,7 @@ module.exports = {
   createUser,
   loginUser,
   loginAdmin,
+  googleOAuthLogin,
   getAllUsers,
   getAUser,
   deleteAUser,
@@ -608,4 +738,5 @@ module.exports = {
   updateOrderStatus,
   getAllOrders,
   getOrderByUserId,
+  gapiLogin,
 };

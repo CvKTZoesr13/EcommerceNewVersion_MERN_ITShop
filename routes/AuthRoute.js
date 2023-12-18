@@ -1,4 +1,6 @@
 const express = require("express");
+const passport = require("passport");
+require("../config/passport");
 const {
   createUser,
   loginUser,
@@ -25,8 +27,14 @@ const {
   updateOrderStatus,
   getAllOrders,
   getOrderByUserId,
+  googleOAuthLogin,
+  gapiLogin,
 } = require("../controllers/UserController");
-const { authMiddleware, isAdmin } = require("../middlewares/authMiddleware");
+const {
+  authMiddleware,
+  isAdmin,
+  isOAuth,
+} = require("../middlewares/authMiddleware");
 
 const router = express.Router();
 // create a new user
@@ -89,5 +97,26 @@ router.put("/password", authMiddleware, updatePassword);
 router.post("/forgot-password-token", forgotPasswordToken);
 // reset password
 router.put("/reset-password/:token", resetPassword);
+
+// OAuth2.0
+router.get(
+  "/auth/google",
+  passport.authenticate("google", {
+    scope: ["profile", "email"],
+    session: false,
+  })
+);
+router.get("/auth/google/callback", isOAuth, googleOAuthLogin);
+
+router.post("/auth/google", gapiLogin);
+router.post("/auth/google/refresh-token", async (req, res) => {
+  const user = new UserRefreshClient(
+    clientId,
+    clientSecret,
+    req.body.refreshToken
+  );
+  const { credentials } = await user.refreshAccessToken(); // optain new tokens
+  res.json(credentials);
+});
 
 module.exports = router;

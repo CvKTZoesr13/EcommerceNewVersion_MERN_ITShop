@@ -3,11 +3,11 @@ const bcrypt = require("bcrypt");
 const { Mongoose } = require("mongoose");
 const crypto = require("crypto");
 // Declare the Schema of the Mongo model
-var userSchema = new mongoose.Schema(
+var userOAuthSchema = new mongoose.Schema(
   {
     firstName: {
       type: String,
-      required: true,
+      // required: true,
     },
     lastName: {
       type: String,
@@ -21,17 +21,11 @@ var userSchema = new mongoose.Schema(
     mobile: {
       type: String,
       required: true,
-      unique: true,
-    },
-    typeLogin: {
-      type: String,
-      default: "system",
+      // unique: true,
     },
     password: {
       type: String,
-      required: function () {
-        return this.typeLogin !== "google";
-      },
+      // required: true,
     },
     createdAt: {
       type: Date,
@@ -40,6 +34,13 @@ var userSchema = new mongoose.Schema(
     isAdmin: {
       type: String,
       default: "user",
+    },
+    role: {
+      type: String,
+      default: "user",
+    },
+    typeLogin: {
+      type: String,
     },
     refreshToken: {
       type: String,
@@ -67,9 +68,8 @@ var userSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
-
 // not available with arrow function
-userSchema.pre("save", async function (next) {
+userOAuthSchema.pre("save", async function (next) {
   if (!this.isModified("password")) {
     next();
   }
@@ -77,11 +77,11 @@ userSchema.pre("save", async function (next) {
   this.password = await bcrypt.hash(this.password, salt);
 });
 
-userSchema.methods.isPasswordMatched = async function (enteredPassword) {
+userOAuthSchema.methods.isPasswordMatched = async function (enteredPassword) {
   return await bcrypt.compare(enteredPassword, this.password);
 };
 
-userSchema.methods.createPasswordResetToken = async function () {
+userOAuthSchema.methods.createPasswordResetToken = async function () {
   const resetToken = crypto.randomBytes(32).toString("hex");
   this.passwordResetToken = crypto
     .createHash("sha256")
@@ -91,4 +91,4 @@ userSchema.methods.createPasswordResetToken = async function () {
   return resetToken;
 };
 //Export the model
-module.exports = mongoose.model("User", userSchema);
+module.exports = mongoose.model("UserOAuth", userOAuthSchema);
