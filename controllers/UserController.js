@@ -136,13 +136,13 @@ const gapiLogin = asyncHandler(async (req, res) => {
             : user.family_name,
         lastName: user.given_name,
         email: user.email,
-        mobile: "null",
+        mobile: crypto.randomUUID(),
         typeLogin: "google",
         locale: user.locale,
       };
       const newOAuthUser = await UserOAuth.create(userData);
-      await User.create(userData);
-      console.log(newOAuthUser);
+      const newUser = await User.create(userData);
+      console.log(newOAuthUser, newUser);
     } catch (error) {
       throw new Error(error);
     }
