@@ -32,7 +32,7 @@ var userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: function () {
-        return this.typeLogin !== "google";
+        return this.typeLogin !== "google" && this.typeLogin !== "github";
       },
     },
     createdAt: {

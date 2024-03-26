@@ -8,8 +8,24 @@ const {
 } = require("../utils/cloudinary");
 const slugify = require("slugify");
 const fs = require("fs");
-// POST
-// create a product
+const redisClient = require("../config/redisClient");
+
+function getOrSetCache(key, cb) {
+  return new Promise((resolve, reject) => {
+    redisClient.get(key, async (error, data) => {
+      if (error) return reject(error);
+      if (data) return resolve(JSON.parse(data));
+      const freshData = await cb();
+      redisClient.setEx(
+        key,
+        process.env.DEFAULT_EXPIRATION,
+        JSON.stringify(freshData)
+      );
+      resolve(freshData);
+    });
+  });
+}
+
 const createProduct = asyncHandler(async (req, res) => {
   try {
     if (req.body.title) {
@@ -28,8 +44,11 @@ const createProduct = asyncHandler(async (req, res) => {
 const getAProduct = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
-    const findProduct = await Product.findById(id);
-    res.json(findProduct);
+    const product = await getOrSetCache(`product_${id}`, async () => {
+      const data = await Product.findById(id);
+      return data;
+    });
+    res.json(product);
   } catch (error) {
     throw new Error(error);
   }
@@ -66,13 +85,20 @@ const getAllProducts = asyncHandler(async (req, res) => {
     const page = req.query.page;
     const limit = req.query.limit;
     const skip = (page - 1) * limit;
-
+    console.log(JSON.stringify(req.query));
     query = query.skip(skip).limit(limit);
     if (req.query.page) {
       const productCount = await Product.countDocuments();
       if (skip >= productCount) throw new Error("This page doesn't exists");
     }
-    const product = await query;
+    // const product = await query;
+    const product = await getOrSetCache(
+      `all_products_${JSON.stringify(req.query)}`,
+      async () => {
+        const data = await query;
+        return data;
+      }
+    );
     res.json(product);
   } catch (error) {
     throw new Error(error);

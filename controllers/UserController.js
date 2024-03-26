@@ -14,6 +14,8 @@ const crypto = require("crypto");
 const uniqid = require("uniqid");
 const axios = require("axios");
 const { OAuth2Client } = require("google-auth-library");
+const removeFirstLetter = require("../config/removeFirstLetter");
+const { isAdmin } = require("../middlewares/authMiddleware");
 const dotenv = require("dotenv").config();
 // exchange tokens for google oauth - gapi
 const oAuth2Client = new OAuth2Client(
@@ -187,6 +189,104 @@ const gapiLogin = asyncHandler(async (req, res) => {
     },
     { new: true }
   );
+});
+
+const githubLogin = asyncHandler(async (req, res) => {
+  try {
+    const code = req.query.code; // exchange code for tokens
+    const githubClientID = process.env.GITHUB_CLIENT_ID;
+    const githubClientSecret = process.env.GITHUB_CLIENT_SECRET;
+    //async await
+    console.log("Github's code: " + code);
+    const response = await axios.post(
+      `https://github.com/login/oauth/access_token?client_id=${githubClientID}&client_secret=${githubClientSecret}&code=${code}`,
+      {},
+      {
+        headers: {
+          accept: "application/json",
+        },
+      }
+    );
+    console.log(response.data);
+    if (response.data.error) {
+      res.status(400).json({ message: "Invalid Credentials", success: false });
+    }
+
+    // using access token from response
+    const { access_token } = response.data;
+    if (access_token) {
+      const userData = await axios.get(`https://api.github.com/user`, {
+        headers: {
+          accept: "application/json",
+          Authorization: `token ${access_token}`,
+        },
+      });
+      console.log("User's data: ", userData.data);
+      const user = userData.data;
+      // create new user from data that is returned by github api
+      const findAUser = await UserOAuth.findOne({
+        email: `${user.id}+${user.login}@users.noreply.github.com`,
+      });
+      if (!findAUser) {
+        try {
+          console.log("User doesn't exist in database -> create new user!");
+          const userResponse = {
+            firstName: user.name ? user.name.split(" ")[0] : user.login,
+            lastName:
+              removeFirstLetter(user.name) === user.name
+                ? user.name
+                : removeFirstLetter(user.name),
+            email:
+              user.email === null
+                ? `${user.id}+${user.login}@users.noreply.github.com`
+                : user.email,
+            mobile: crypto.randomUUID(),
+            typeLogin: "github",
+            locale: user.location,
+          };
+          const newOAuthUser = await UserOAuth.create(userResponse);
+          const newUser = await User.create(userResponse);
+          console.log(newOAuthUser, newUser);
+          console.log("Created new user successfully!");
+        } catch (error) {
+          throw new Error(error);
+        }
+      } else {
+        console.log("User exists! User's id: " + findAUser?._id);
+      }
+
+      // end of create new user -> login processing
+      const findUser = await User.findOne({
+        email: `${user.id}+${user.login}@users.noreply.github.com`,
+      });
+      if (findUser?.typeLogin === "github") {
+        const refreshToken = await generateRefreshToken(findUser?._id);
+        const updateUser = await User.findByIdAndUpdate(
+          findUser.id,
+          { refreshToken: refreshToken },
+          { new: true }
+        );
+        res.cookie("refreshToken", refreshToken, {
+          httpOnly: true,
+          maxAge: 72 * 60 * 60 * 1000,
+        });
+        res.json({
+          _id: findUser?._id,
+          firstName: findUser?.firstName,
+          lastName: findUser?.lastName,
+          email: findUser?.email,
+          mobile: findUser?.mobile,
+          typeLogin: findUser?.typeLogin,
+          isAdmin: findUser?.isAdmin,
+          accessToken: generateToken(findUser?._id),
+        });
+      } else {
+        throw new Error("Invalid Credentials");
+      }
+    }
+  } catch (error) {
+    throw new Error(error);
+  }
 });
 
 // admin login
@@ -739,4 +839,5 @@ module.exports = {
   getAllOrders,
   getOrderByUserId,
   gapiLogin,
+  githubLogin,
 };

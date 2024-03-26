@@ -29,6 +29,7 @@ const {
   getOrderByUserId,
   googleOAuthLogin,
   gapiLogin,
+  githubLogin,
 } = require("../controllers/UserController");
 const {
   authMiddleware,
@@ -118,5 +119,8 @@ router.post("/auth/google/refresh-token", async (req, res) => {
   const { credentials } = await user.refreshAccessToken(); // optain new tokens
   res.json(credentials);
 });
+
+// Github OAuth
+router.get("/auth/github/callback", githubLogin);
 
 module.exports = router;

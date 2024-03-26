@@ -17,6 +17,7 @@ const {
   uploadPhoto,
   productImgResize,
 } = require("../middlewares/uploadImages");
+const isCached = require("../middlewares/redisCached");
 
 // create a product
 router.post("/", authMiddleware, isAdmin, createProduct);

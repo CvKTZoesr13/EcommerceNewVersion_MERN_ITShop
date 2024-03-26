@@ -1,5 +1,6 @@
 const express = require("express");
 const dbConnect = require("./config/dbConnect");
+const { redisConnect } = require("./config/redisConnect");
 const cors = require("cors");
 const app = express();
 const dotenv = require("dotenv").config();
@@ -18,8 +19,9 @@ const bodyParser = require("body-parser");
 const { notFound, errorHandler } = require("./middlewares/errorHandler");
 const cookieParser = require("cookie-parser");
 const morgan = require("morgan");
+const redisClient = require("./config/redisClient");
 dbConnect();
-
+redisConnect();
 // Cross-Origin Resource Sharing
 app.use(cors());
 
@@ -40,8 +42,12 @@ app.use("/api/upload", uploadRouter);
 
 app.use(notFound);
 app.use(errorHandler);
-app.listen(PORT, () => {
-  console.log(
-    `Server is running on port ${PORT}.\nCtr + Click to see what happen in http://localhost:${PORT}`
-  );
+
+// connecting to redis whenever the server is started
+redisClient.connect().then(() => {
+  app.listen(PORT, () => {
+    console.log(
+      `Server is running on port ${PORT}.\nCtr + Click to see what happen in http://localhost:${PORT}`
+    );
+  });
 });
