@@ -29,12 +29,21 @@ const {
   getOrderByUserId,
   googleOAuthLogin,
   gapiLogin,
+  githubLogin,
+  removeProductFromCart,
+  updateProductQuantityFromCart,
+  createNewOrder,
+  getMyOrders,
 } = require("../controllers/UserController");
 const {
   authMiddleware,
   isAdmin,
   isOAuth,
 } = require("../middlewares/authMiddleware");
+const {
+  checkout,
+  paymentVerification,
+} = require("../controllers/PaymentController");
 
 const router = express.Router();
 // create a new user
@@ -49,8 +58,28 @@ router.post("/cart", authMiddleware, userCart);
 router.get("/cart", authMiddleware, getUserCart);
 // delete all products in user's cart
 router.delete("/empty-cart", authMiddleware, emptyCart);
+// delete specific product from cart
+router.delete(
+  "/delete-product-cart/:cartItemId",
+  authMiddleware,
+  removeProductFromCart
+);
+// update quantity of product in cart
+router.delete(
+  "/update-product-cart/:cartItemId/:newQuantity",
+  authMiddleware,
+  updateProductQuantityFromCart
+);
 // create, cash order
 router.post("/cart/cash-order", authMiddleware, createOrder);
+// create, cash order v2
+router.post("/cart/create-order", authMiddleware, createNewOrder);
+// get order
+router.get("/order/history", authMiddleware, getMyOrders);
+// post order checkout
+router.post("/order/checkout", authMiddleware, checkout);
+// post order payment
+router.post("/order/paymentVerification", authMiddleware, paymentVerification);
 // get user's orders
 router.get("/get-orders", authMiddleware, getOrders);
 // get all orders of all users
@@ -118,5 +147,8 @@ router.post("/auth/google/refresh-token", async (req, res) => {
   const { credentials } = await user.refreshAccessToken(); // optain new tokens
   res.json(credentials);
 });
+
+// Github OAuth
+router.get("/auth/github/callback", githubLogin);
 
 module.exports = router;

@@ -14,6 +14,9 @@ const crypto = require("crypto");
 const uniqid = require("uniqid");
 const axios = require("axios");
 const { OAuth2Client } = require("google-auth-library");
+const removeFirstLetter = require("../config/removeFirstLetter");
+const { isAdmin } = require("../middlewares/authMiddleware");
+const OrderDetail = require("../models/OrderDetail");
 const dotenv = require("dotenv").config();
 // exchange tokens for google oauth - gapi
 const oAuth2Client = new OAuth2Client(
@@ -187,6 +190,104 @@ const gapiLogin = asyncHandler(async (req, res) => {
     },
     { new: true }
   );
+});
+
+const githubLogin = asyncHandler(async (req, res) => {
+  try {
+    const code = req.query.code; // exchange code for tokens
+    const githubClientID = process.env.GITHUB_CLIENT_ID;
+    const githubClientSecret = process.env.GITHUB_CLIENT_SECRET;
+    //async await
+    console.log("Github's code: " + code);
+    const response = await axios.post(
+      `https://github.com/login/oauth/access_token?client_id=${githubClientID}&client_secret=${githubClientSecret}&code=${code}`,
+      {},
+      {
+        headers: {
+          accept: "application/json",
+        },
+      }
+    );
+    console.log(response.data);
+    if (response.data.error) {
+      res.status(400).json({ message: "Invalid Credentials", success: false });
+    }
+
+    // using access token from response
+    const { access_token } = response.data;
+    if (access_token) {
+      const userData = await axios.get(`https://api.github.com/user`, {
+        headers: {
+          accept: "application/json",
+          Authorization: `token ${access_token}`,
+        },
+      });
+      console.log("User's data: ", userData.data);
+      const user = userData.data;
+      // create new user from data that is returned by github api
+      const findAUser = await UserOAuth.findOne({
+        email: `${user.id}+${user.login}@users.noreply.github.com`,
+      });
+      if (!findAUser) {
+        try {
+          console.log("User doesn't exist in database -> create new user!");
+          const userResponse = {
+            firstName: user.name ? user.name.split(" ")[0] : user.login,
+            lastName:
+              removeFirstLetter(user.name) === user.name
+                ? user.name
+                : removeFirstLetter(user.name),
+            email:
+              user.email === null
+                ? `${user.id}+${user.login}@users.noreply.github.com`
+                : user.email,
+            mobile: crypto.randomUUID(),
+            typeLogin: "github",
+            locale: user.location,
+          };
+          const newOAuthUser = await UserOAuth.create(userResponse);
+          const newUser = await User.create(userResponse);
+          console.log(newOAuthUser, newUser);
+          console.log("Created new user successfully!");
+        } catch (error) {
+          throw new Error(error);
+        }
+      } else {
+        console.log("User exists! User's id: " + findAUser?._id);
+      }
+
+      // end of create new user -> login processing
+      const findUser = await User.findOne({
+        email: `${user.id}+${user.login}@users.noreply.github.com`,
+      });
+      if (findUser?.typeLogin === "github") {
+        const refreshToken = await generateRefreshToken(findUser?._id);
+        const updateUser = await User.findByIdAndUpdate(
+          findUser.id,
+          { refreshToken: refreshToken },
+          { new: true }
+        );
+        res.cookie("refreshToken", refreshToken, {
+          httpOnly: true,
+          maxAge: 72 * 60 * 60 * 1000,
+        });
+        res.json({
+          _id: findUser?._id,
+          firstName: findUser?.firstName,
+          lastName: findUser?.lastName,
+          email: findUser?.email,
+          mobile: findUser?.mobile,
+          typeLogin: findUser?.typeLogin,
+          isAdmin: findUser?.isAdmin,
+          accessToken: generateToken(findUser?._id),
+        });
+      } else {
+        throw new Error("Invalid Credentials");
+      }
+    }
+  } catch (error) {
+    throw new Error(error);
+  }
 });
 
 // admin login
@@ -491,44 +592,57 @@ const getWishlist = asyncHandler(async (req, res) => {
 
 // user's cart
 const userCart = asyncHandler(async (req, res) => {
-  const { cart } = req.body;
+  // const { cart } = req.body;
   const { _id } = req.user;
+
+  // ################## //
+  const { productId, color, quantity, price } = req.body;
   validateMongoDbId(_id);
   try {
-    let products = [];
-    let object = {};
-    let getPrice;
-    const getAllProductInCart = Cart.find();
-    const user = await User.findById(_id);
-    // check if user already has product in cart
-    const alreadyExistCart = await Cart.findOne({ orderby: user._id });
-    if (alreadyExistCart) {
-      const deletedCart = await Cart.findOneAndDelete({ orderby: user._id });
-      res.json({
-        deletedCart,
-        message: "Error, duplicated cart, this have been removed!",
-      });
-    } else {
-      for (let i = 0; i < cart.length; i++) {
-        object.product = cart[i]._id;
-        object.count = cart[i].count;
-        object.color = cart[i].color;
-        getPrice = await Product.findById(cart[i]._id).select("price").exec();
-        object.price = getPrice.price;
+    // let products = [];
+    // let object = {};
+    // let getPrice;
+    // const getAllProductInCart = Cart.find();
+    // const user = await User.findById(_id);
+    // // check if user already has product in cart
+    // const alreadyExistCart = await Cart.findOne({ orderby: user._id });
+    // if (alreadyExistCart) {
+    //   const deletedCart = await Cart.findOneAndDelete({ orderby: user._id });
+    //   res.json({
+    //     deletedCart,
+    //     message: "Error, duplicated cart, this have been removed!",
+    //   });
+    // } else {
+    //   for (let i = 0; i < cart.length; i++) {
+    //     object.product = cart[i]._id;
+    //     object.count = cart[i].count;
+    //     object.color = cart[i].color;
+    //     getPrice = await Product.findById(cart[i]._id).select("price").exec();
+    //     object.price = getPrice.price;
 
-        products.push({ ...object });
-      }
-      let cartTotal = 0;
-      for (let i = 0; i < products.length; i++) {
-        cartTotal += products[i].count * products[i].price;
-      }
-      let newCart = await new Cart({
-        products,
-        cartTotal,
-        orderby: user?._id,
-      }).save();
-      res.json(newCart);
-    }
+    //     products.push({ ...object });
+    //   }
+    //   let cartTotal = 0;
+    //   for (let i = 0; i < products.length; i++) {
+    //     cartTotal += products[i].count * products[i].price;
+    //   }
+    //   let newCart = await new Cart({
+    //     products,
+    //     cartTotal,
+    //     orderby: user?._id,
+    //   }).save();
+    //   res.json(newCart);
+    // }
+
+    // ############################################################### //
+    let newCart = await new Cart({
+      userId: _id,
+      productId,
+      color,
+      price,
+      quantity,
+    }).save();
+    res.json(newCart);
   } catch (error) {
     throw new Error(error);
   }
@@ -539,9 +653,13 @@ const getUserCart = asyncHandler(async (req, res) => {
   const { _id } = req.user;
   validateMongoDbId(_id);
   try {
-    const cart = await Cart.findOne({ orderby: _id }).populate(
-      "products.product"
-    );
+    // const cart = await Cart.findOne({ orderby: _id }).populate(
+    //   "products.product"
+    // );
+
+    const cart = await Cart.find({ userId: _id })
+      .populate("productId")
+      .populate("color");
     const user = await User.findById(_id).select("firstName lastName");
     if (cart === null) {
       res.json({
@@ -553,6 +671,41 @@ const getUserCart = asyncHandler(async (req, res) => {
       user,
       cart,
     });
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+const removeProductFromCart = asyncHandler(async (req, res) => {
+  const { _id } = req.user;
+  const { cartItemId } = req.params;
+  if (!cartItemId)
+    res.status(400).json({ message: "Invalid parameter", isSuccess: false });
+  console.log(_id, cartItemId);
+  validateMongoDbId(_id);
+  try {
+    const deleteProductFromCart = await Cart.deleteOne({
+      userId: _id,
+      _id: cartItemId,
+    });
+    res.json(deleteProductFromCart);
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+const updateProductQuantityFromCart = asyncHandler(async (req, res) => {
+  const { _id } = req.user;
+  const { cartItemId, newQuantity } = req.params;
+  validateMongoDbId(_id);
+  try {
+    const cartItem = await Cart.findOne({
+      userId: _id,
+      _id: cartItemId,
+    });
+    cartItem.quantity = newQuantity;
+    cartItem.save();
+    res.json(cartItem);
   } catch (error) {
     throw new Error(error);
   }
@@ -711,6 +864,47 @@ const updateOrderStatus = asyncHandler(async (req, res) => {
   }
 });
 
+// new order API - created at 02/05/2024
+const createNewOrder = asyncHandler(async (req, res) => {
+  const {
+    shippingInfo,
+    orderItems,
+    totalPrice,
+    totalPriceAfterDiscount,
+    paymentInfo,
+  } = req.body;
+  const { _id } = req.user;
+  try {
+    const order = await OrderDetail.create({
+      shippingInfo,
+      orderItems,
+      totalPrice,
+      totalPriceAfterDiscount,
+      paymentInfo,
+      user: _id,
+    });
+    res.json({
+      order,
+      success: true,
+    });
+  } catch (error) {
+    throw new Error(error);
+  }
+});
+
+// get  user's order
+const getMyOrders = asyncHandler(async (req, res) => {
+  const _id = req.user;
+  try {
+    const orders = await OrderDetail.find({ user: _id })
+      .populate("user")
+      .populate("orderItems.product")
+      .populate("orderItems.color");
+    res.json({ orders });
+  } catch (error) {
+    throw new Error(error);
+  }
+});
 module.exports = {
   createUser,
   loginUser,
@@ -738,5 +932,11 @@ module.exports = {
   updateOrderStatus,
   getAllOrders,
   getOrderByUserId,
+  // new order API
+  createNewOrder,
   gapiLogin,
+  githubLogin,
+  removeProductFromCart,
+  updateProductQuantityFromCart,
+  getMyOrders,
 };

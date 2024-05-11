@@ -9,6 +9,7 @@ var prodCategorySchema = new mongoose.Schema(
       unique: true,
       index: true,
     },
+    // typeof category
   },
   {
     timestamps: true,

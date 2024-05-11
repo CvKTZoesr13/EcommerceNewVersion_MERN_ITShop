@@ -4,6 +4,24 @@ const asyncHandler = require("express-async-handler");
 const validateMongoDbId = require("../utils/validateMongoDbId");
 const cloudinaryUploadImg = require("../utils/cloudinary");
 const fs = require("fs");
+const redisClient = require("../config/redisClient");
+
+function getOrSetCache(key, cb) {
+  return new Promise((resolve, reject) => {
+    redisClient.get(key, async (error, data) => {
+      if (error) return reject(error);
+      if (data) return resolve(JSON.parse(data));
+      const freshData = await cb();
+      redisClient.setEx(
+        key,
+        process.env.DEFAULT_EXPIRATION,
+        JSON.stringify(freshData)
+      );
+      resolve(freshData);
+    });
+  });
+}
+
 // POST
 // create an user's blog
 const createBlog = asyncHandler(async (req, res) => {
@@ -39,9 +57,19 @@ const getBlog = asyncHandler(async (req, res) => {
   const { id } = req.params;
   validateMongoDbId(id);
   try {
-    const getBlog = await Blog.findById(id)
-      .populate({ path: "likes", select: "_id firstName lastName" })
-      .populate({ path: "dislikes", select: "_id firstName lastName" });
+    // const getBlog = await Blog.findById(id)
+    //   .populate({ path: "likes", select: "_id firstName lastName" })
+    //   .populate({ path: "dislikes", select: "_id firstName lastName" });
+
+    const getBlog = await getOrSetCache(`blog_${id}`, async () => {
+      const aBlog = await Blog.findById(id)
+        .populate({ path: "likes", select: "_id firstName lastName" })
+        .populate({ path: "dislikes", select: "_id firstName lastName" });
+
+      return aBlog;
+    });
+
+    // update view here
     const updateViews = await Blog.findByIdAndUpdate(
       id,
       {
@@ -62,7 +90,12 @@ const getBlog = asyncHandler(async (req, res) => {
 // get all user's blog
 const getAllBlogs = asyncHandler(async (req, res) => {
   try {
-    const getBlogs = await Blog.find();
+    // const getBlogs = await Blog.find();
+    // res.json(getBlogs);
+    const getBlogs = await getOrSetCache("all_blogs", async () => {
+      const allBlogs = await Blog.find();
+      return allBlogs;
+    });
     res.json(getBlogs);
   } catch (error) {
     throw new Error(error);
