@@ -45,7 +45,7 @@ const getAProduct = asyncHandler(async (req, res) => {
   try {
     const { id } = req.params;
     const product = await getOrSetCache(`product_${id}`, async () => {
-      const data = await Product.findById(id);
+      const data = await Product.findById(id).populate("color");
       return data;
     });
     res.json(product);
